@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 contract Campaign is Ownable, ReentrancyGuard {
-    enum State { InReview, Approved, Rejected, Paused }
+    enum State { InReview, Approved, Rejected, Paused, Finalized }
 
     State public status;
     address public creator;
@@ -24,27 +24,29 @@ contract Campaign is Ownable, ReentrancyGuard {
 
     event StatusChanged(State newStatus);
     event Donated(address indexed from, uint256 amount);
-    event Refunded(address indexed to, uint256 amount);
 
     constructor(
-        address _owner,      // ← Donare (factory.owner())
-        address _creator,    // ← msg.sender del factory
+        address _owner,
+        address _creator,
         uint256 _id,
         string memory _title,
         string memory _description,
         string memory _imageCID,
-        address _beneficiary,
         uint256 _goal,
         uint256 _deadline,
         string memory _url
     ) {
+        require(_goal > 0, "Goal must be greater than 0");
+        require(_deadline > block.timestamp, "Deadline must be in the future");
+
         _transferOwnership(_owner);
+
         creator     = _creator;
+        beneficiary = _creator; // Beneficiario es el creador en el MVP
         id          = _id;
         title       = _title;
         description = _description;
         imageCID    = _imageCID;
-        beneficiary = _beneficiary;
         goal        = _goal;
         deadline    = _deadline;
         url         = _url;
@@ -56,13 +58,17 @@ contract Campaign is Ownable, ReentrancyGuard {
         _;
     }
 
-    // El organizador edita → vuelve a InReview
+    modifier notFinalized() {
+        require(status != State.Finalized, "Campaña finalizada");
+        _;
+    }
+
     function markAsEdited() external onlyCreator {
+        require(status != State.Finalized, "No editable");
         status = State.InReview;
         emit StatusChanged(status);
     }
 
-    // Solo Donare (owner) aprueba o rechaza
     function setStatus(State newStatus) external onlyOwner {
         require(
             newStatus == State.Approved ||
@@ -73,26 +79,35 @@ contract Campaign is Ownable, ReentrancyGuard {
         emit StatusChanged(newStatus);
     }
 
-    // Pausar por seguridad
     function pause() external onlyOwner {
+        require(status != State.Finalized, "No puede pausar campaña finalizada");
         status = State.Paused;
         emit StatusChanged(status);
     }
 
-    // ----------------------------------------------------
-    // Donaciones y reembolsos
-    // ----------------------------------------------------
-    function donate() external payable {
-        require(status == State.Approved, "No activa");
-        contributions[msg.sender] += msg.value;
+    function donate() external payable nonReentrant notFinalized {
+        require(status == State.Approved, "Campaña no aprobada");
+        require(block.timestamp <= deadline, "Campaña vencida");
+        require(msg.value > 0, "Debe enviar fondos");
+
         raised += msg.value;
+        contributions[msg.sender] += msg.value;
+
+        // Transferencia directa al beneficiario
+        payable(beneficiary).transfer(msg.value);
         emit Donated(msg.sender, msg.value);
+
+        // Verificar si se alcanzó el objetivo
+        if (raised >= goal) {
+            status = State.Finalized;
+            emit StatusChanged(State.Finalized);
+        }
     }
 
-    function refund(uint256 amount) external nonReentrant {
-        require(contributions[msg.sender] >= amount, "No contribuiste tanto");
-        contributions[msg.sender] -= amount;
-        payable(msg.sender).transfer(amount);
-        emit Refunded(msg.sender, amount);
+    function finalizeIfExpired() external {
+        require(status == State.Approved, "Solo campañas activas pueden finalizar");
+        require(block.timestamp > deadline, "Aún no venció");
+        status = State.Finalized;
+        emit StatusChanged(State.Finalized);
     }
 }
