@@ -9,7 +9,17 @@ contract CampaignFactory is Ownable {
     address[] public allCampaigns;
     mapping(address => address[]) public campaignsOf;
 
-    event CampaignCreated(uint256 indexed id, address campaignAddr, address creator);
+    address public usdtTokenAddress;
+
+    event CampaignCreated(
+        uint256 indexed id,
+        address campaignAddr,
+        address creator
+    );
+
+    constructor(address _usdtTokenAddress) {
+        usdtTokenAddress = _usdtTokenAddress;
+    }
 
     function createCampaign(
         string memory title,
@@ -19,37 +29,51 @@ contract CampaignFactory is Ownable {
         uint256 deadline,
         string memory url
     ) external {
-        // Validación: solo una campaña en revisión o activa a la vez por address
+        // Solo puede haber una campaña en estado no finalizado por usuario
         for (uint i = 0; i < campaignsOf[msg.sender].length; ++i) {
             Campaign c = Campaign(campaignsOf[msg.sender][i]);
             Campaign.State st = c.status();
-            require(
-                st != Campaign.State.InReview && st != Campaign.State.Approved && st != Campaign.State.Paused,
-                "Ya tienes una campaña activa o en revisión"
-            );
+            if (
+                st == Campaign.State.InReview ||
+                st == Campaign.State.PendingChanges ||
+                st == Campaign.State.Active
+            ) {
+                revert("Ya tienes una campania activa o pendiente");
+            }
         }
 
         uint256 id = nextId++;
 
-        Campaign camp = new Campaign(
-            owner(),        // Donare (admin)
-            msg.sender,     // Creador y beneficiario
+        Campaign newCampaign = new Campaign(
+            owner(), // Donare (admin)
+            msg.sender, // Beneficiario / creador
             id,
             title,
             description,
             imageCID,
             goal,
             deadline,
-            url
+            url,
+            usdtTokenAddress
         );
 
-        allCampaigns.push(address(camp));
-        campaignsOf[msg.sender].push(address(camp));
+        allCampaigns.push(address(newCampaign));
+        campaignsOf[msg.sender].push(address(newCampaign));
 
-        emit CampaignCreated(id, address(camp), msg.sender);
+        emit CampaignCreated(id, address(newCampaign), msg.sender);
     }
 
     function all() external view returns (address[] memory) {
         return allCampaigns;
+    }
+
+    function campaignsByUser (
+        address user
+    ) external view returns (address[] memory) {
+        return campaignsOf[user];
+    }
+
+    function setUsdtTokenAddress(address newAddress) external onlyOwner {
+        usdtTokenAddress = newAddress;
     }
 }

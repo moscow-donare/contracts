@@ -2,10 +2,17 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 contract Campaign is Ownable, ReentrancyGuard {
-    enum State { InReview, Approved, Rejected, Paused, Finalized }
+    enum State {
+        InReview,
+        PendingChanges,
+        Active,
+        Cancelled,
+        Completed
+    }
 
     State public status;
     address public creator;
@@ -15,6 +22,8 @@ contract Campaign is Ownable, ReentrancyGuard {
     uint256 public deadline;
     uint256 public id;
 
+    IERC20 public usdtToken;
+
     string public title;
     string public description;
     string public imageCID;
@@ -22,7 +31,7 @@ contract Campaign is Ownable, ReentrancyGuard {
 
     mapping(address => uint256) public contributions;
 
-    event StatusChanged(State newStatus);
+    event StateChanged(State newState, string reason);
     event Donated(address indexed from, uint256 amount);
 
     constructor(
@@ -34,23 +43,26 @@ contract Campaign is Ownable, ReentrancyGuard {
         string memory _imageCID,
         uint256 _goal,
         uint256 _deadline,
-        string memory _url
+        string memory _url,
+        address _usdtTokenAddress
     ) {
         require(_goal > 0, "Goal must be greater than 0");
         require(_deadline > block.timestamp, "Deadline must be in the future");
 
         _transferOwnership(_owner);
 
-        creator     = _creator;
-        beneficiary = _creator; // Beneficiario es el creador en el MVP
-        id          = _id;
-        title       = _title;
+        creator = _creator;
+        beneficiary = _creator;
+        id = _id;
+        title = _title;
         description = _description;
-        imageCID    = _imageCID;
-        goal        = _goal;
-        deadline    = _deadline;
-        url         = _url;
-        status      = State.InReview;
+        imageCID = _imageCID;
+        goal = _goal;
+        deadline = _deadline;
+        url = _url;
+        status = State.InReview;
+
+        usdtToken = IERC20(_usdtTokenAddress);
     }
 
     modifier onlyCreator() {
@@ -58,56 +70,101 @@ contract Campaign is Ownable, ReentrancyGuard {
         _;
     }
 
-    modifier notFinalized() {
-        require(status != State.Finalized, "Campaña finalizada");
+    modifier onlyActive() {
+        require(status == State.Active, "La campania no esta activa");
         _;
     }
 
-    function markAsEdited() external onlyCreator {
-        require(status != State.Finalized, "No editable");
-        status = State.InReview;
-        emit StatusChanged(status);
-    }
-
-    function setStatus(State newStatus) external onlyOwner {
+    modifier notFinal() {
         require(
-            newStatus == State.Approved ||
-            newStatus == State.Rejected,
-            "Estado inválido"
+            status != State.Completed && status != State.Cancelled,
+            "Campania finalizada"
         );
-        status = newStatus;
-        emit StatusChanged(newStatus);
+        _;
     }
 
-    function pause() external onlyOwner {
-        require(status != State.Finalized, "No puede pausar campaña finalizada");
-        status = State.Paused;
-        emit StatusChanged(status);
+    function editCampaign(
+        string memory _title,
+        string memory _description,
+        string memory _imageCID,
+        uint256 _goal,
+        uint256 _deadline,
+        string memory _url,
+        string calldata reason
+    ) external onlyCreator notFinal {
+        require(status != State.InReview, "Ya esta en revision");
+        require(_goal > 0, "Meta invalida");
+        require(_deadline > block.timestamp, "Deadline invalido");
+
+        title = _title;
+        description = _description;
+        imageCID = _imageCID;
+        goal = _goal;
+        deadline = _deadline;
+        url = _url;
+
+        status = State.InReview;
+        emit StateChanged(State.InReview, reason);
     }
 
-    function donate() external payable nonReentrant notFinalized {
-        require(status == State.Approved, "Campaña no aprobada");
-        require(block.timestamp <= deadline, "Campaña vencida");
-        require(msg.value > 0, "Debe enviar fondos");
+    // --- Transiciones de estado manuales por Donare (admin) ---
+    function approveCampaign(string calldata reason) external onlyOwner {
+        status = State.Active;
+        emit StateChanged(State.Active, reason);
+    }
 
-        raised += msg.value;
-        contributions[msg.sender] += msg.value;
+    function requestChanges(string calldata reason) external onlyOwner {
+        status = State.PendingChanges;
+        emit StateChanged(State.PendingChanges, reason);
+    }
 
-        // Transferencia directa al beneficiario
-        payable(beneficiary).transfer(msg.value);
-        emit Donated(msg.sender, msg.value);
+    function cancelByAdmin(string calldata reason) external onlyOwner {
+        status = State.Cancelled;
+        emit StateChanged(State.Cancelled, reason);
+    }
 
-        // Verificar si se alcanzó el objetivo
+    // --- Cambios desde el lado del creador ---
+    function markAsEdited(
+        string calldata reason
+    ) external onlyCreator notFinal {
+        status = State.InReview;
+        emit StateChanged(State.InReview, reason);
+    }
+
+    function cancelByCreator(
+        string calldata reason
+    ) external onlyCreator notFinal {
+        status = State.Cancelled;
+        emit StateChanged(State.Cancelled, reason);
+    }
+
+    // --- Donaciones ---
+    function donate(uint256 amount) external nonReentrant onlyActive {
+        require(block.timestamp <= deadline, "Campania vencida");
+        require(amount > 0, "Debe enviar fondos");
+
+        bool success = usdtToken.transferFrom(msg.sender, beneficiary, amount);
+        require(success, "Transferencia fallida");
+
+        raised += amount;
+        contributions[msg.sender] += amount;
+
+        emit Donated(msg.sender, amount);
+
         if (raised >= goal) {
-            status = State.Finalized;
-            emit StatusChanged(State.Finalized);
+            status = State.Completed;
+            emit StateChanged(
+                State.Completed,
+                "Se alcanzo el objetivo de recaudacion"
+            );
         }
     }
 
+    // --- Finalizar si venció el plazo ---
     function finalizeIfExpired() external {
-        require(status == State.Approved, "Solo campañas activas pueden finalizar");
-        require(block.timestamp > deadline, "Aún no venció");
-        status = State.Finalized;
-        emit StatusChanged(State.Finalized);
+        require(status == State.Active, "Solo campanias activas");
+        require(block.timestamp > deadline, "Aun no vencio");
+        status = State.Completed;
+        emit StateChanged(State.Completed, "Se alcanzo la fecha limite");
     }
 }
