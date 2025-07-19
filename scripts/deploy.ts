@@ -9,13 +9,13 @@ async function main() {
   const MockUSDT = await ethers.getContractFactory("MockUSDT");
   const usdt = await MockUSDT.deploy();
   await usdt.waitForDeployment();
-  console.log("🪙 MockUSDT deployed to:", usdt.getAddress());
+  console.log("🪙 MockUSDT deployed to:", await usdt.getAddress());
 
   // 2. Deploy CampaignFactory
   const CampaignFactory = await ethers.getContractFactory("CampaignFactory");
   const factory = await CampaignFactory.deploy(usdt.getAddress());
   await factory.waitForDeployment();
-  console.log("🏗️ CampaignFactory deployed to:", factory.getAddress());
+  console.log("🏗️ CampaignFactory deployed to:", await factory.getAddress());
 
   // 3. Crear campaña de prueba
   const tx = await factory.createCampaign(
