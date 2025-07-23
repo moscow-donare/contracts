@@ -22,6 +22,7 @@ contract CampaignFactory is Ownable {
     }
 
     function createCampaign(
+        address creator,
         string memory title,
         string memory description,
         string memory imageCID,
@@ -30,8 +31,8 @@ contract CampaignFactory is Ownable {
         string memory url
     ) external {
         // Solo puede haber una campaña en estado no finalizado por usuario
-        for (uint i = 0; i < campaignsOf[msg.sender].length; ++i) {
-            Campaign c = Campaign(campaignsOf[msg.sender][i]);
+        for (uint i = 0; i < campaignsOf[creator].length; ++i) {
+            Campaign c = Campaign(campaignsOf[creator][i]);
             Campaign.State st = c.status();
             if (
                 st == Campaign.State.InReview ||
@@ -46,7 +47,7 @@ contract CampaignFactory is Ownable {
 
         Campaign newCampaign = new Campaign(
             owner(), // Donare (admin)
-            msg.sender, // Beneficiario / creador
+            creator, // Beneficiario / creador
             id,
             title,
             description,
