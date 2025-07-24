@@ -14,6 +14,14 @@ contract Campaign is Ownable, ReentrancyGuard {
         Completed
     }
 
+    enum Category {
+        Health,
+        Education,
+        Emergency,
+        Raffle,
+        Project
+    }
+
     State public status;
     address public creator;
     address public beneficiary;
@@ -21,6 +29,7 @@ contract Campaign is Ownable, ReentrancyGuard {
     uint256 public raised;
     uint256 public deadline;
     uint256 public id;
+    Category public category;
 
     IERC20 public usdtToken;
 
@@ -35,35 +44,38 @@ contract Campaign is Ownable, ReentrancyGuard {
     event Donated(address indexed from, uint256 amount);
 
     constructor(
-        address _owner,
-        address _creator,
-        uint256 _id,
-        string memory _title,
-        string memory _description,
-        string memory _imageCID,
-        uint256 _goal,
-        uint256 _deadline,
-        string memory _url,
-        address _usdtTokenAddress
-    ) {
-        require(_goal > 0, "Goal must be greater than 0");
-        require(_deadline > block.timestamp, "Deadline must be in the future");
+    address _owner,
+    address _creator,
+    uint256 _id,
+    string memory _title,
+    string memory _description,
+    string memory _imageCID,
+    uint256 _goal,
+    uint256 _deadline,
+    string memory _url,
+    uint8 _category, 
+    address _usdtTokenAddress
+) {
+    require(_goal > 0, "Goal must be greater than 0");
+    require(_deadline > block.timestamp, "Deadline must be in the future");
+    require(_category <= uint8(Category.Project), "Invalid category");
 
-        _transferOwnership(_owner);
+    _transferOwnership(_owner);
+    //TODO: VALIDAR SI ES NECESARIO DEPLOYAR BENEFICIARY Y CREADOR
+    creator = _creator;
+    beneficiary = _creator;
+    id = _id;
+    title = _title;
+    description = _description;
+    imageCID = _imageCID;
+    goal = _goal;
+    deadline = _deadline;
+    url = _url;
+    status = State.InReview;
+    category = Category(_category);
 
-        creator = _creator;
-        beneficiary = _creator;
-        id = _id;
-        title = _title;
-        description = _description;
-        imageCID = _imageCID;
-        goal = _goal;
-        deadline = _deadline;
-        url = _url;
-        status = State.InReview;
-
-        usdtToken = IERC20(_usdtTokenAddress);
-    }
+    usdtToken = IERC20(_usdtTokenAddress);
+}
 
     modifier onlyCreator() {
         require(msg.sender == creator, "Solo el creador");

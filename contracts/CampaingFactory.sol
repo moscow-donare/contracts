@@ -28,7 +28,8 @@ contract CampaignFactory is Ownable {
         string memory imageCID,
         uint256 goal,
         uint256 deadline,
-        string memory url
+        string memory url,
+        uint8 category
     ) external {
         // Solo puede haber una campaña en estado no finalizado por usuario
         for (uint i = 0; i < campaignsOf[creator].length; ++i) {
@@ -55,6 +56,7 @@ contract CampaignFactory is Ownable {
             goal,
             deadline,
             url,
+            category,
             usdtTokenAddress
         );
 
@@ -72,6 +74,12 @@ contract CampaignFactory is Ownable {
         address user
     ) external view returns (address[] memory) {
         return campaignsOf[user];
+    }
+
+    function campaignsById (
+        uint256 id
+    ) external view returns (address) {
+        return allCampaigns[id];
     }
 
     function setUsdtTokenAddress(address newAddress) external onlyOwner {
