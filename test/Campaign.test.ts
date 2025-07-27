@@ -26,6 +26,7 @@ describe("Campaign", function () {
       ethers.parseUnits("100", 18),
       Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60,
       "https://donare.test",
+      1,
       usdt.getAddress()
     );
     await campaign.waitForDeployment();

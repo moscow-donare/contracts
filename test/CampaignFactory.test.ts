@@ -22,12 +22,14 @@ describe("CampaignFactory", function () {
 
   it("should create a new campaign", async () => {
     const tx = await factory.connect(user).createCampaign(
+      user.address, // <-- address creator
       "Título prueba",
       "Descripcion",
       "CID123",
       ethers.parseUnits("500", 18),
       Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
-      "https://donare.test"
+      "https://donare.test",
+      1
     );
 
     await tx.wait();
@@ -38,21 +40,27 @@ describe("CampaignFactory", function () {
 
   it("should block creating two active campaigns", async () => {
     await factory.connect(user).createCampaign(
+      user.address,
       "Primera",
       "Desc",
       "CID",
       ethers.parseUnits("100", 18),
       Math.floor(Date.now() / 1000) + 100000,
-      "https://url"
+      "https://url",
+      1
     );
 
-    await expect(factory.connect(user).createCampaign(
-      "Segunda",
-      "Desc",
-      "CID",
-      ethers.parseUnits("100", 18),
-      Math.floor(Date.now() / 1000) + 100000,
-      "https://url"
-    )).to.be.revertedWith("Ya tienes una campania activa o pendiente");
+    await expect(
+      factory.connect(user).createCampaign(
+        user.address,
+        "Segunda",
+        "Desc",
+        "CID",
+        ethers.parseUnits("100", 18),
+        Math.floor(Date.now() / 1000) + 100000,
+        "https://url",
+        1
+      )
+    ).to.be.revertedWith("Ya tienes una campania activa o pendiente");
   });
 });
