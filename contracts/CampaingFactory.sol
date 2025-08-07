@@ -61,9 +61,9 @@ contract CampaignFactory is Ownable {
         );
 
         allCampaigns.push(address(newCampaign));
-        campaignsOf[msg.sender].push(address(newCampaign));
+        campaignsOf[creator].push(address(newCampaign));
 
-        emit CampaignCreated(id, address(newCampaign), msg.sender);
+        emit CampaignCreated(id, address(newCampaign), creator);
     }
 
     function all() external view returns (address[] memory) {
