@@ -24,7 +24,6 @@ contract Campaign is Ownable, ReentrancyGuard {
 
     State public status;
     address public creator;
-    address public beneficiary;
     uint256 public goal;
     uint256 public raised;
     uint256 public deadline;
@@ -63,7 +62,6 @@ contract Campaign is Ownable, ReentrancyGuard {
     _transferOwnership(_owner);
     //TODO: VALIDAR SI ES NECESARIO DEPLOYAR BENEFICIARY Y CREADOR
     creator = _creator;
-    beneficiary = _creator;
     id = _id;
     title = _title;
     description = _description;
@@ -71,7 +69,7 @@ contract Campaign is Ownable, ReentrancyGuard {
     goal = _goal;
     deadline = _deadline;
     url = _url;
-    status = State.InReview;
+    status = State.Active;
     category = Category(_category);
 
     usdtToken = IERC20(_usdtTokenAddress);
@@ -155,7 +153,7 @@ contract Campaign is Ownable, ReentrancyGuard {
         require(block.timestamp <= deadline, "Campania vencida");
         require(amount > 0, "Debe enviar fondos");
 
-        bool success = usdtToken.transferFrom(msg.sender, beneficiary, amount);
+        bool success = usdtToken.transferFrom(msg.sender, creator, amount);
         require(success, "Transferencia fallida");
 
         raised += amount;
