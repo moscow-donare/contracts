@@ -13,7 +13,7 @@ async function main() {
 
   // 2. Deploy CampaignFactory
   const CampaignFactory = await ethers.getContractFactory("CampaignFactory");
-  const factory = await CampaignFactory.deploy(usdt.getAddress());
+  const factory = await CampaignFactory.deploy(await usdt.getAddress());
   await factory.waitForDeployment();
   console.log("🏗️ CampaignFactory deployed to:", await factory.getAddress());
 }
